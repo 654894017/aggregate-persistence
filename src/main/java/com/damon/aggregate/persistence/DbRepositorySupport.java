@@ -73,14 +73,14 @@ public abstract class DbRepositorySupport {
      *
      * @param newItem
      * @param oldItem
-     * @param convert
+     * @param convertor
      * @param isNew
      * @param <T>
      * @param <B>
      * @return
      */
     public <T extends ID, B extends ID> Boolean executeListUpdate(Collection<T> newItem, Collection<T> oldItem,
-                                                                  Function<T, B> convert, Predicate<T> isNew) {
+                                                                  Function<T, B> convertor, Predicate<T> isNew) {
         Collection<T> newAddItems;
         if (isNew == null) {
             newAddItems = ObjectComparator.findNewEntities(newItem, oldItem);
@@ -88,7 +88,7 @@ public abstract class DbRepositorySupport {
             newAddItems = ObjectComparator.findNewEntities(newItem, isNew::test);
         }
         for (T item : newAddItems) {
-            B itemPO = convert.apply(item);
+            B itemPO = convertor.apply(item);
             boolean result = insert(itemPO);
             item.setId(itemPO.getId());
             if (!result) {
@@ -97,8 +97,8 @@ public abstract class DbRepositorySupport {
             }
         }
         newItem.removeAll(newAddItems);
-        Collection<B> newItems = newItem.stream().map(convert::apply).collect(Collectors.toList());
-        Collection<B> oldItems = oldItem.stream().map(convert::apply).collect(Collectors.toList());
+        Collection<B> newItems = newItem.stream().map(convertor::apply).collect(Collectors.toList());
+        Collection<B> oldItems = oldItem.stream().map(convertor::apply).collect(Collectors.toList());
         Collection<ChangedEntity<B>> changedEntityList = ObjectComparator.findChangedEntities(newItems, oldItems);
         for (ChangedEntity<B> changedEntity : changedEntityList) {
             Set<String> changedFields = ObjectComparator.findChangedFields(changedEntity.getNewEntity(), changedEntity.getOldEntity());
@@ -136,7 +136,7 @@ public abstract class DbRepositorySupport {
 
     protected abstract <A extends ID> Boolean insert(A entity);
 
-    protected abstract <A extends ID, B extends ID> Boolean insert(A domainEntity, Function<A, B> function);
+    protected abstract <A extends ID, B extends ID> Boolean insert(A entity, Function<A, B> convertor);
 
     protected abstract <A extends ID> Boolean update(A entity, Set<String> changedFields);
 

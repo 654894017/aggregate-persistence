@@ -51,7 +51,9 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
     @Override
     protected <A extends ID, B extends ID> Boolean insert(A entity, Function<A, B> function) {
         B newEntity = function.apply(entity);
-        return insert(newEntity);
+        boolean result = insert(newEntity);
+        entity.setId(newEntity.getId());
+        return result;
     }
 
     private String sqlStatement(String sqlMethod, Class<?> entityClass) {
@@ -87,7 +89,9 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
         UpdateWrapper<A> updateWrapper = new UpdateWrapper<>();
         updateWrapper.eq(primaryKey, entity.getId());
         // 创建 UpdateWrapper 对象以指定更新条件
-        changedFields.forEach(field -> updateWrapper.set(StrUtil.toUnderlineCase(field), ReflectUtil.getFieldValue(entity, field)));
+        changedFields.forEach(field ->
+                updateWrapper.set(StrUtil.toUnderlineCase(field), ReflectUtil.getFieldValue(entity, field))
+        );
         map.put(Constants.ENTITY, newEntity);
         map.put(Constants.WRAPPER, updateWrapper);
         try {
@@ -119,7 +123,9 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
         }
         UpdateWrapper<A> updateWrapper = new UpdateWrapper<>();
         updateWrapper.eq(primaryKey, entity.getId());
-        changedFields.forEach(field -> updateWrapper.set(StrUtil.toUnderlineCase(field), ReflectUtil.getFieldValue(entity, field)));
+        changedFields.forEach(field ->
+                updateWrapper.set(StrUtil.toUnderlineCase(field), ReflectUtil.getFieldValue(entity, field))
+        );
         map.put(Constants.ENTITY, newEntity);
         map.put(Constants.WRAPPER, updateWrapper);
         try {
