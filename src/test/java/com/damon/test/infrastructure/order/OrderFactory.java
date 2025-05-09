@@ -48,7 +48,7 @@ public class OrderFactory {
                 new OrderItem(item.getId(), item.getOrderId(), item.getGoodsId(), item.getGoodsName(), item.getAmount(), item.getPrice())
         ).collect(Collectors.toList());
         order.setVersion(orderPO.getVersion());
-        order.setDeleted(orderPO.getDeleted());
+        order.setDeleted(orderPO.getIsDelete());
         order.setConsignee(new Consignee(orderPO.getConsigneeName(), orderPO.getConsigneeShippingAddress(), orderPO.getConsigneeMobile()));
         order.setId(orderPO.getId());
         order.setConsignee(new Consignee(orderPO.getConsigneeName(), orderPO.getConsigneeShippingAddress(), orderPO.getConsigneeMobile()));
@@ -59,7 +59,6 @@ public class OrderFactory {
         order.setActualPayMoney(orderPO.getActualPayMoney());
         order.setTotalMoney(orderPO.getTotalMoney());
         order.setOrderSubmitUserId(orderPO.getOrderSubmitUserId());
-        order.setDeleted(orderPO.getDeleted());
         order.setOrderItems(orderItems);
         order.setSellerId(orderPO.getSellerId());
         return AggregateFactory.createAggregate(order);

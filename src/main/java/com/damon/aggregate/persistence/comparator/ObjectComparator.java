@@ -21,46 +21,49 @@ public class ObjectComparator {
     }
 
     public static Set<String> findChangedFields(Object newObject, Object oldObject, boolean toUnderlineCase) {
-        Set<String> differentProperties = new HashSet<>();
-        if (isValidComparison(newObject, oldObject)) {
-            Class<?> clazz = newObject.getClass();
-            Field[] fields = ReflectUtil.getFields(clazz);
-            for (Field field : fields) {
-                if (Modifier.isStatic(field.getModifiers())) {
-                    continue;
-                }
-                field.setAccessible(true);
-                try {
-                    Object newValue = field.get(newObject);
-                    Object oldValue = field.get(oldObject);
-                    if (!isEquals(newValue, oldValue)) {
-                        if (toUnderlineCase) {
-                            differentProperties.add(StrUtil.toUnderlineCase(field.getName()));
-                        } else {
-                            differentProperties.add(field.getName());
-                        }
-                    }
-                } catch (Exception e) {
-                    throw new AggregatePersistenceException(field.getName(), e);
-                }
+        if (!isValidComparison(newObject, oldObject)) {
+            return Collections.emptySet();
+        }
+
+        Set<String> differentFields = new HashSet<>();
+        for (Field field : ReflectUtil.getFields(newObject.getClass())) {
+            if (Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+
+            field.setAccessible(true);
+            Object newValue = getFieldValue(field, newObject);
+            Object oldValue = getFieldValue(field, oldObject);
+
+            if (!isEquals(newValue, oldValue)) {
+                String name = toUnderlineCase ? StrUtil.toUnderlineCase(field.getName()) : field.getName();
+                differentFields.add(name);
             }
         }
-        return differentProperties;
+        return differentFields;
+    }
+
+    private static Object getFieldValue(Field field, Object object) {
+        try {
+            return field.get(object);
+        } catch (IllegalAccessException e) {
+            throw new AggregatePersistenceException("无法访问字段：" + field.getName(), e);
+        }
     }
 
     private static boolean isValidComparison(Object obj1, Object obj2) {
-        return obj1 != null && obj2 != null && obj1.getClass().equals(obj2.getClass());
+        return obj1 != null && obj2 != null && obj1.getClass() == obj2.getClass();
     }
 
     /**
-     * 对象为字符串时:  null == ''
+     * null == "", 否则调用 ObjectUtil.equal
      *
      * @param newValue
      * @param oldValue
      * @return
      */
     private static boolean isEquals(Object newValue, Object oldValue) {
-        if (newValue == null && StrUtil.EMPTY.equals(oldValue)) {
+        if (newValue == null && "".equals(oldValue)) {
             return true;
         }
         return ObjectUtil.equal(newValue, oldValue);

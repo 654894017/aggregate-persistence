@@ -27,6 +27,6 @@ public class OrderPO implements Versionable<Long> {
     private Long couponId;
     private Long deductionPoints;
     private Long orderSubmitUserId;
-    private Long deleted;
+    private Long isDelete;
     private Long sellerId;
 }
