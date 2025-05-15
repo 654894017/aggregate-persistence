@@ -122,7 +122,7 @@ where id = #{id} and version = #{version}
 
 ## 2. 使用aggregate-persistence
 
-在项目中加入以下依赖，就可以使用aggregate-persistence的功能了：
+在项目中加入以下依赖，就可以使用aggregate-persistence的功能了
 
 ```xml
 
