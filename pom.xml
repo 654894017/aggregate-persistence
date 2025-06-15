@@ -4,13 +4,13 @@
 
     <groupId>com.damon</groupId>
     <artifactId>aggregate-persistence</artifactId>
-    <version>2.0.0</version>
+    <version>2.1.0</version>
     <packaging>jar</packaging>
 
     <name>aggregate-persistence</name>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <mybatis.plus.version>3.5.3.1</mybatis.plus.version>
+        <mybatis.plus.version>3.5.12</mybatis.plus.version>
     </properties>
 
     <dependencies>
@@ -31,7 +31,7 @@
         </dependency>
         <dependency>
             <groupId>cn.hutool</groupId>
-            <artifactId>hutool-all</artifactId>
+            <artifactId>hutool-core</artifactId>
             <version>5.8.20</version>
         </dependency>
         <dependency>

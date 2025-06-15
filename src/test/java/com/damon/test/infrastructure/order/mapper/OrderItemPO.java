@@ -1,16 +1,13 @@
 package com.damon.test.infrastructure.order.mapper;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import com.damon.aggregate.persistence.ID;
 import lombok.Data;
 
 @Data
 @TableName("demo_order_item")
 public class OrderItemPO implements ID<Long> {
-    @TableId
+    @TableId(type = IdType.AUTO)
     private Long id;
     private Long orderId;
     private Long goodsId;
