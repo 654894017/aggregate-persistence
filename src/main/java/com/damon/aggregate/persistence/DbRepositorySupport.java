@@ -3,11 +3,10 @@ package com.damon.aggregate.persistence;
 
 import com.damon.aggregate.persistence.comparator.ChangedEntity;
 import com.damon.aggregate.persistence.comparator.ObjectComparator;
-import com.damon.aggregate.persistence.utils.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
- import java.util.*;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -104,20 +103,15 @@ public abstract class DbRepositorySupport {
         Collection<B> newItems = newestItems.stream().map(convertor::apply).collect(Collectors.toList());
         Collection<B> oldItems = oldItem.stream().map(convertor::apply).collect(Collectors.toList());
         Collection<ChangedEntity<B>> changedEntityList = ObjectComparator.findChangedEntities(newItems, oldItems);
-        for (ChangedEntity<B> changedEntity : changedEntityList) {
-            Set<String> changedFields = ObjectComparator.findChangedFields(changedEntity.getNewEntity(), changedEntity.getOldEntity());
-            if (changedFields.isEmpty()) {
-                continue;
+        changedEntityList.forEach(changedEntity -> {
+            Set<String> changedFields = ObjectComparator.findChangedFields(
+                    changedEntity.getNewEntity(), changedEntity.getOldEntity()
+            );
+            if (!changedFields.isEmpty()) {
+                update(changedEntity.getNewEntity(), changedFields);
             }
-            boolean result = update(changedEntity.getNewEntity(), changedFields);
-            if (!result) {
-                log.warn("Update item failed, type: {} , info : {} ,change fields : {}",
-                        changedEntity.getNewEntity().getClass().getTypeName(),
-                        JsonUtils.jsonToString(changedEntity.getNewEntity()), changedFields
-                );
-                return false;
-            }
-        }
+        });
+
         //3.处理删除的实体
         Collection<B> removedItems = ObjectComparator.findRemovedEntities(newItems, oldItems);
         if (removedItems.isEmpty()) {
