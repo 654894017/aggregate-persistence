@@ -12,20 +12,17 @@ import com.damon.test.infrastructure.order.mapper.OrderItemMapper;
 import com.damon.test.infrastructure.order.mapper.OrderItemPO;
 import com.damon.test.infrastructure.order.mapper.OrderMapper;
 import com.damon.test.infrastructure.order.mapper.OrderPO;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Repository
+@RequiredArgsConstructor
 public class OrderGateway extends MybatisRepositorySupport implements IOrderGateway {
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
-
-    public OrderGateway(OrderMapper orderMapper, OrderItemMapper orderItemMapper) {
-        this.orderMapper = orderMapper;
-        this.orderItemMapper = orderItemMapper;
-    }
 
     @Override
     public Aggregate<Order> get(OrderId orderId) {
@@ -63,14 +60,16 @@ public class OrderGateway extends MybatisRepositorySupport implements IOrderGate
     private Long update(Aggregate<Order> orderAggregate) {
         Order order = orderAggregate.getRoot();
         Order snapshot = orderAggregate.getSnapshot();
-        Boolean result = super.executeSafeUpdate(order, snapshot, OrderFactory::convert);
-        Boolean result2 = super.executeListUpdate(order.getOrderItems(), snapshot.getOrderItems(), item -> {
+        boolean orderResult = super.executeSafeUpdate(order, snapshot, OrderFactory::convert);
+        boolean orderItemResult = super.executeListUpdate(order.getOrderItems(), snapshot.getOrderItems(), item -> {
             item.setOrderId(order.getId());
             return OrderFactory.convert(item);
         });
-        if (!result2 && !result) {
-            throw new OptimisticLockException(String.format("Update order (%s) error, it's not found or changed by another user", orderAggregate.getRoot().getId()));
+        if (!orderResult && !orderItemResult) {
+            String errorMessage = String.format("Update order (%s) error, it's not found or changed by another user", orderAggregate.getRoot().getId());
+            throw new OptimisticLockException(errorMessage);
         }
         return order.getId();
     }
+
 }

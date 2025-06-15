@@ -10,7 +10,7 @@
     <name>aggregate-persistence</name>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <mybatis.plus.version>3.5.3.1</mybatis.plus.version>
+        <mybatis.plus.version>3.5.12</mybatis.plus.version>
     </properties>
 
     <dependencies>

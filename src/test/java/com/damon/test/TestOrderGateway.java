@@ -26,9 +26,13 @@ public class TestOrderGateway {
         order.setStatus(order.getStatus() + 1);
         List<OrderItem> item = order.getOrderItems();
         item.add(new OrderItem(order.getId(), 1l, "1", 1, 1l));
+        item.add(new OrderItem(order.getId(), 1l, "1", 1, 1l));
+
         item.get(1).setGoodsId(IdUtil.getSnowflakeNextId());
         item.remove(0);
+        item.remove(1);
         orderGateway.save(orderAggregate);
+        System.out.println(1);
     }
 
     @Test

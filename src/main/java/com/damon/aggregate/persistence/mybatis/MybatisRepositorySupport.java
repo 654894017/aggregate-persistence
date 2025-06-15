@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.enums.SqlMethod;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.core.toolkit.Constants;
 import com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils;
@@ -17,25 +18,49 @@ import com.damon.aggregate.persistence.utils.ReflectUtils;
 import org.apache.ibatis.session.SqlSession;
 import org.mybatis.spring.SqlSessionUtils;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class MybatisRepositorySupport extends DbRepositorySupport {
 
+    @SuppressWarnings("unchecked")
+    protected <T extends ID> BaseMapper<T> getMapper(Class<T> entityClass) {
+        // 获取当前SqlSession（自动处理多数据源）
+        SqlSession sqlSession = getSqlSession(entityClass);
+        return SqlHelper.getMapper(entityClass, sqlSession);
+    }
+
     @Override
-    protected <A extends ID> Boolean delete(A item) {
-        Class<?> clazz = item.getClass();
+    protected <A extends ID> boolean insertBatch(Collection<A> items) {
+        if (items.size() > batchSize()) {
+            throw new AggregatePersistenceException("The number of items to be inserted cannot exceed the batch size. " +
+                    "batchSize : " + batchSize());
+        }
+        Class<A> clazz = (Class<A>) items.iterator().next().getClass();
+        BaseMapper<A> baseMapper = getMapper(clazz);
+        baseMapper.insert(items, batchSize());
+        return true;
+    }
+
+    @Override
+    protected <A extends ID> boolean deleteBatch(Collection<A> items) {
+        Class<A> clazz = (Class<A>) items.iterator().next().getClass();
         SqlSession sqlSession = getSqlSession(clazz);
+        Map<String, Object> map = CollectionUtils.newHashMapWithExpectedSize(1);
+        Set<Object> ids = items.stream().map(ID::getId).collect(Collectors.toSet());
+        map.put(Constants.COLL, ids);
         try {
-            return SqlHelper.retBool(sqlSession.delete(sqlStatement(SqlMethod.DELETE_BY_ID.getMethod(), clazz), item));
+            return SqlHelper.retBool(sqlSession.delete(sqlStatement(SqlMethod.DELETE_BY_IDS.getMethod(), clazz), map));
         } finally {
             closeSqlSession(sqlSession, clazz);
         }
     }
 
     @Override
-    protected <A extends ID> Boolean insert(A entity) {
+    protected <A extends ID> boolean insert(A entity) {
         if (entity instanceof Versionable) {
             Versionable versionable = (Versionable) entity;
             versionable.setVersion(1);
@@ -49,7 +74,7 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
     }
 
     @Override
-    protected <A extends ID, B extends ID> Boolean insert(A entity, Function<A, B> function) {
+    protected <A extends ID, B extends ID> boolean insert(A entity, Function<A, B> function) {
         B newEntity = function.apply(entity);
         boolean result = insert(newEntity);
         entity.setId(newEntity.getId());
@@ -77,7 +102,7 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
      * @return
      */
     @Override
-    protected <A extends ID> Boolean update(A entity, Set<String> changedFields) {
+    protected <A extends ID> boolean update(A entity, Set<String> changedFields) {
         A newEntity = (A) ReflectUtil.newInstance(entity.getClass());
         newEntity.setId(entity.getId());
         SqlSession sqlSession = getSqlSession(entity.getClass());
@@ -110,7 +135,7 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
      * @return
      */
     @Override
-    protected <A extends Versionable> Boolean update(A entity, Set<String> changedFields) {
+    protected <A extends Versionable> boolean update(A entity, Set<String> changedFields) {
         A newEntity = (A) ReflectUtil.newInstance(entity.getClass());
         newEntity.setId(entity.getId());
         newEntity.setVersion(entity.getVersion());
@@ -138,4 +163,15 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
     private String getPrimaryKey(Class<?> entityClass) {
         return ReflectUtils.getFieldNameByAnnotation(entityClass, TableId.class);
     }
+
+    /**
+     * 批量保存最大大小
+     *
+     * @return
+     */
+    protected int batchSize() {
+        return 1024;
+    }
+
+
 }

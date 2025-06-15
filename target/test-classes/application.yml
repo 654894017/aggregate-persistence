@@ -1,4 +1,4 @@
-spring:
+ spring:
   profiles:
     active: dev
   jackson:

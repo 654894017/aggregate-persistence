@@ -12,7 +12,7 @@ public class OrderPO implements Versionable<Long> {
     private static final long serialVersionUID = 1L;
     @Version
     private Integer version;
-    @TableId
+    @TableId(type = IdType.AUTO)
     private Long id;
     private Integer status;
     @TableField(fill = FieldFill.INSERT)
