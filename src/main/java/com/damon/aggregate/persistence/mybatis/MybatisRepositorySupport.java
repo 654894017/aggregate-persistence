@@ -8,7 +8,6 @@ import com.baomidou.mybatisplus.core.enums.SqlMethod;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.core.toolkit.Constants;
-import com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils;
 import com.baomidou.mybatisplus.extension.toolkit.SqlHelper;
 import com.damon.aggregate.persistence.DbRepositorySupport;
 import com.damon.aggregate.persistence.ID;
@@ -16,7 +15,10 @@ import com.damon.aggregate.persistence.Versionable;
 import com.damon.aggregate.persistence.exception.AggregatePersistenceException;
 import com.damon.aggregate.persistence.utils.ReflectUtils;
 import org.apache.ibatis.session.SqlSession;
+import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.SqlSessionUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.Map;
@@ -24,12 +26,16 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Component
 public class MybatisRepositorySupport extends DbRepositorySupport {
+
+    @Autowired
+    private SqlSessionTemplate sqlSessionTemplate;
 
     @SuppressWarnings("unchecked")
     protected <T extends ID> BaseMapper<T> getMapper(Class<T> entityClass) {
         // 获取当前SqlSession（自动处理多数据源）
-        SqlSession sqlSession = getSqlSession(entityClass);
+        SqlSession sqlSession = getSqlSession();
         return SqlHelper.getMapper(entityClass, sqlSession);
     }
 
@@ -48,14 +54,14 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
     @Override
     protected <A extends ID> boolean deleteBatch(Collection<A> items) {
         Class<A> clazz = (Class<A>) items.iterator().next().getClass();
-        SqlSession sqlSession = getSqlSession(clazz);
+        SqlSession sqlSession = getSqlSession();
         Map<String, Object> map = CollectionUtils.newHashMapWithExpectedSize(1);
         Set<Object> ids = items.stream().map(ID::getId).collect(Collectors.toSet());
         map.put(Constants.COLL, ids);
         try {
             return SqlHelper.retBool(sqlSession.delete(sqlStatement(SqlMethod.DELETE_BY_IDS.getMethod(), clazz), map));
         } finally {
-            closeSqlSession(sqlSession, clazz);
+            closeSqlSession(sqlSession);
         }
     }
 
@@ -65,11 +71,11 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
             Versionable versionable = (Versionable) entity;
             versionable.setVersion(1);
         }
-        SqlSession sqlSession = getSqlSession(entity.getClass());
+        SqlSession sqlSession = getSqlSession();
         try {
             return SqlHelper.retBool(sqlSession.insert(sqlStatement(SqlMethod.INSERT_ONE.getMethod(), entity.getClass()), entity));
         } finally {
-            closeSqlSession(sqlSession, entity.getClass());
+            closeSqlSession(sqlSession);
         }
     }
 
@@ -85,12 +91,12 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
         return SqlHelper.table(entityClass).getSqlStatement(sqlMethod);
     }
 
-    private void closeSqlSession(SqlSession sqlSession, Class<?> entityClass) {
-        SqlSessionUtils.closeSqlSession(sqlSession, GlobalConfigUtils.currentSessionFactory(entityClass));
+    private void closeSqlSession(SqlSession sqlSession) {
+        SqlSessionUtils.closeSqlSession(sqlSession, sqlSessionTemplate.getSqlSessionFactory());
     }
 
-    private SqlSession getSqlSession(Class<?> entityClass) {
-        return SqlSessionUtils.getSqlSession(GlobalConfigUtils.currentSessionFactory(entityClass));
+    private SqlSession getSqlSession() {
+        return SqlSessionUtils.getSqlSession(sqlSessionTemplate.getSqlSessionFactory());
     }
 
     /**
@@ -105,25 +111,7 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
     protected <A extends ID> boolean update(A entity, Set<String> changedFields) {
         A newEntity = (A) ReflectUtil.newInstance(entity.getClass());
         newEntity.setId(entity.getId());
-        SqlSession sqlSession = getSqlSession(entity.getClass());
-        Map<String, Object> map = CollectionUtils.newHashMapWithExpectedSize(2);
-        String primaryKey = getPrimaryKey(entity.getClass());
-        if (primaryKey == null) {
-            throw new AggregatePersistenceException("Entity not found with the primary key annotation. entity : " + entity.getClass().getName());
-        }
-        UpdateWrapper<A> updateWrapper = new UpdateWrapper<>();
-        updateWrapper.eq(primaryKey, entity.getId());
-        // 创建 UpdateWrapper 对象以指定更新条件
-        changedFields.forEach(field ->
-                updateWrapper.set(StrUtil.toUnderlineCase(field), ReflectUtil.getFieldValue(entity, field))
-        );
-        map.put(Constants.ENTITY, newEntity);
-        map.put(Constants.WRAPPER, updateWrapper);
-        try {
-            return SqlHelper.retBool(sqlSession.update(sqlStatement(SqlMethod.UPDATE.getMethod(), entity.getClass()), map));
-        } finally {
-            closeSqlSession(sqlSession, entity.getClass());
-        }
+        return update(entity, changedFields, newEntity);
     }
 
     /**
@@ -139,10 +127,14 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
         A newEntity = (A) ReflectUtil.newInstance(entity.getClass());
         newEntity.setId(entity.getId());
         newEntity.setVersion(entity.getVersion());
-        SqlSession sqlSession = getSqlSession(entity.getClass());
+        return update(entity, changedFields, newEntity);
+    }
+
+    private <A extends ID> boolean update(A entity, Set<String> changedFields, A newEntity) {
+        SqlSession sqlSession = getSqlSession();
         Map<String, Object> map = CollectionUtils.newHashMapWithExpectedSize(2);
         // 创建 UpdateWrapper 对象以指定更新条件
-        String primaryKey = getPrimaryKey(entity.getClass());
+        String primaryKey = getPrimaryKey(newEntity.getClass());
         if (primaryKey == null) {
             throw new AggregatePersistenceException("Entity not found with the primary key annotation. entity : " + entity.getClass().getName());
         }
@@ -156,7 +148,7 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
         try {
             return SqlHelper.retBool(sqlSession.update(sqlStatement(SqlMethod.UPDATE.getMethod(), entity.getClass()), map));
         } finally {
-            closeSqlSession(sqlSession, entity.getClass());
+            closeSqlSession(sqlSession);
         }
     }
 

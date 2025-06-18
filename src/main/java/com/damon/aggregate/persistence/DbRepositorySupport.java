@@ -90,7 +90,7 @@ public abstract class DbRepositorySupport {
         newAddItems.forEach(item ->
                 map.put(convertor.apply(item), item)
         );
-        insertBatch(map.keySet());
+        this.insertBatch(map.keySet());
         map.forEach((converted, original) ->
                 //把数据库自增id设置回原来的实体
                 original.setId(converted.getId())
@@ -102,8 +102,8 @@ public abstract class DbRepositorySupport {
         newestItems.removeAll(newAddItems);
         Collection<B> newItems = newestItems.stream().map(convertor::apply).collect(Collectors.toList());
         Collection<B> oldItems = oldItem.stream().map(convertor::apply).collect(Collectors.toList());
-        Collection<ChangedEntity<B>> changedEntityList = ObjectComparator.findChangedEntities(newItems, oldItems);
-        changedEntityList.forEach(changedEntity -> {
+        Collection<ChangedEntity<B>> changedEntities = ObjectComparator.findChangedEntities(newItems, oldItems);
+        changedEntities.forEach(changedEntity -> {
             Set<String> changedFields = ObjectComparator.findChangedFields(
                     changedEntity.getNewEntity(), changedEntity.getOldEntity()
             );
