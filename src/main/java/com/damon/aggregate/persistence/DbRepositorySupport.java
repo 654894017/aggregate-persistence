@@ -12,105 +12,102 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * 数据库仓库支持类，提供安全更新、列表增量更新等基础操作
- *
- * @param
+ * Database repository support class providing safe update and list incremental update operations
  */
 public abstract class DbRepositorySupport {
     private static final Logger log = LoggerFactory.getLogger(DbRepositorySupport.class);
 
     /**
-     * 通过数据库乐观锁实现安全更新
+     * Perform safe update using database optimistic locking
      *
-     * @param newObj   新对象
-     * @param oldObj   旧对象
-     * @param function 转换函数
-     * @param <A>      继承自Versionable的实体类型
-     * @param <B>      继承自Versionable的DTO类型
-     * @return 是否更新成功
+     * @param newObj   New object
+     * @param oldObj   Old object
+     * @param function Conversion function
+     * @param <A>      Entity type extending Versionable
+     * @param <B>      DTO type extending Versionable
+     * @return Whether the update was successful
      */
     public <A extends Versionable, B extends Versionable> boolean executeSafeUpdate(B newObj, B oldObj, Function<B, A> function) {
-        // 空指针检查
-        Objects.requireNonNull(newObj, "新对象不能为null");
-        Objects.requireNonNull(oldObj, "旧对象不能为null");
-        Objects.requireNonNull(function, "转换函数不能为null");
+        // Null pointer checks
+        Objects.requireNonNull(newObj, "New object cannot be null");
+        Objects.requireNonNull(oldObj, "Old object cannot be null");
+        Objects.requireNonNull(function, "Conversion function cannot be null");
 
         A newEntity = function.apply(newObj);
         A oldEntity = function.apply(oldObj);
+        String entityType = newEntity.getClass().getSimpleName();
+        Object entityId = newEntity.getId();
 
-        // 查找变更字段
+        // Find changed fields
         Set<String> changedFields = ObjectComparator.findChangedFields(newEntity, oldEntity, false);
         if (changedFields.isEmpty()) {
-            log.debug("对象没有变更，无需更新。实体ID: {}", newEntity.getId());
+            log.debug("[Entity: {}] No changes detected, no update needed. Entity ID: {}", entityType, entityId);
             return true;
         }
 
-        // 执行更新并同步版本号
+        // Execute update and sync version number
         boolean result = update(newEntity, changedFields);
         if (result) {
             newObj.setVersion(newEntity.getVersion());
-            log.debug("安全更新成功。实体ID: {}, 变更字段: {}", newEntity.getId(), changedFields);
+            log.debug("[Entity: {}] Safe update successful. Entity ID: {}, Changed fields: {}",
+                    entityType, entityId, changedFields);
         } else {
-            log.warn("安全更新失败。实体ID: {}", newEntity.getId());
+            log.warn("[Entity: {}] Safe update failed. Entity ID: {}", entityType, entityId);
         }
         return result;
     }
 
     /**
-     * 列表模式的增量更新(自动处理新增、修改、删除的实体)
-     * 注意: 如果id在数据库里不存在则进行新增操作
+     * Incremental update for list (automatically handles new, modified, and deleted entities)
+     * Note: Entities with non-existent IDs will be inserted
      *
-     * @param newItems  新的实体列表
-     * @param oldItems  旧的实体列表
-     * @param converter 转换函数
-     * @param <A>       继承自ID的实体类型
-     * @param <B>       继承自ID的DTO类型
-     * @return 是否更新成功
+     * @param newItems  New entity list
+     * @param oldItems  Old entity list
+     * @param converter Conversion function
+     * @param <A>       Entity type extending ID
+     * @param <B>       DTO type extending ID
+     * @return Whether the update was successful
      */
     public <A extends ID, B extends ID> boolean executeListUpdate(Collection<B> newItems, Collection<B> oldItems, Function<B, A> converter) {
         return executeListUpdate(newItems, oldItems, converter, null);
     }
 
     /**
-     * 列表模式的增量更新(自动处理新增、修改、删除的实体)
+     * Incremental update for list (automatically handles new, modified, and deleted entities)
      *
-     * @param newItems  新的实体列表
-     * @param oldItems  旧的实体列表
-     * @param converter 转换函数
-     * @param isNew     判断是否为新实体的 predicate
-     * @param <T>       继承自ID的DTO类型
-     * @param <B>       继承自ID的实体类型
-     * @return 是否更新成功
+     * @param newItems  New entity list
+     * @param oldItems  Old entity list
+     * @param converter Conversion function
+     * @param isNew     Predicate to determine if an entity is new
+     * @param <T>       DTO type extending ID
+     * @param <B>       Entity type extending ID
+     * @return Whether the update was successful
      */
     public <T extends ID, B extends ID> boolean executeListUpdate(Collection<T> newItems, Collection<T> oldItems,
                                                                   Function<T, B> converter, Predicate<T> isNew) {
-        // 空指针处理，避免后续操作出现NPE
+        // Handle null collections to avoid NPE
         Collection<T> safeNewItems = Optional.ofNullable(newItems).orElse(Collections.emptyList());
         Collection<T> safeOldItems = Optional.ofNullable(oldItems).orElse(Collections.emptyList());
-        Objects.requireNonNull(converter, "转换函数不能为null");
+        Objects.requireNonNull(converter, "Conversion function cannot be null");
 
-        log.debug("开始执行列表增量更新。新列表大小: {}, 旧列表大小: {}", safeNewItems.size(), safeOldItems.size());
+        // Determine entity type
+        String entityType = getEntityType(safeNewItems, converter);
 
-        // 1. 处理新增的实体
+        // 1. Handle new entities
         Collection<T> newAddItems = findNewEntities(safeNewItems, safeOldItems, isNew);
-        handleNewEntities(newAddItems, converter);
+        handleNewEntities(newAddItems, converter, entityType);
 
-        // 2. 处理更新的实体
-        handleUpdatedEntities(safeNewItems, safeOldItems, newAddItems, converter);
+        // 2. Handle updated entities
+        handleUpdatedEntities(safeNewItems, safeOldItems, newAddItems, converter, entityType);
 
-        // 3. 处理删除的实体
-        boolean deleteResult = handleDeletedEntities(safeNewItems, safeOldItems, converter);
-
-        log.debug("列表增量更新完成。新增: {}, 更新: {}, 删除: {}",
-                newAddItems.size(),
-                (safeNewItems.size() - newAddItems.size()),
-                (safeOldItems.size() - (safeNewItems.size() - newAddItems.size())));
+        // 3. Handle deleted entities
+        boolean deleteResult = handleDeletedEntities(safeNewItems, safeOldItems, converter, entityType);
 
         return deleteResult;
     }
 
     /**
-     * 查找新实体
+     * Find new entities in the collection
      */
     private <T extends ID> Collection<T> findNewEntities(Collection<T> newItems, Collection<T> oldItems, Predicate<T> isNew) {
         if (isNew == null) {
@@ -121,49 +118,47 @@ public abstract class DbRepositorySupport {
     }
 
     /**
-     * 处理新增实体
+     * Handle new entities insertion
      */
-    private <T extends ID, B extends ID> void handleNewEntities(Collection<T> newAddItems, Function<T, B> converter) {
+    private <T extends ID, B extends ID> void handleNewEntities(Collection<T> newAddItems, Function<T, B> converter, String entityType) {
         if (newAddItems.isEmpty()) {
-            log.debug("没有需要新增的实体");
+            log.debug("[Entity: {}] No new entities to add", entityType);
             return;
         }
 
-        log.debug("开始处理新增实体，数量: {}", newAddItems.size());
+        log.debug("[Entity: {}] Starting to process new entities. Count: {}", entityType, newAddItems.size());
 
-        // 转换并批量插入
+        // Convert and batch insert
         Map<B, T> convertedMap = new IdentityHashMap<>();
-        newAddItems.forEach(item ->
-                convertedMap.put(converter.apply(item), item)
-        );
+        newAddItems.forEach(item -> convertedMap.put(converter.apply(item), item));
 
         boolean insertResult = insertBatch(convertedMap.keySet());
 
         if (insertResult) {
-            // 同步自增ID到原始对象
+            // Sync auto-generated IDs back to original objects
             convertedMap.forEach((converted, original) -> original.setId(converted.getId()));
-            log.debug("新增实体处理完成，数量: {}", newAddItems.size());
+            log.debug("[Entity: {}] Completed processing new entities. Count: {}", entityType, newAddItems.size());
         } else {
-            log.error("新增实体处理失败，数量: {}", newAddItems.size());
-            throw new AggregatePersistenceException("批量插入新实体失败");
+            log.error("[Entity: {}] Failed to process new entities. Count: {}", entityType, newAddItems.size());
+            throw new AggregatePersistenceException(String.format("[Entity: %s] Failed to batch insert new entities", entityType));
         }
     }
 
     /**
-     * 处理更新实体
+     * Handle entity updates
      */
     private <T extends ID, B extends ID> void handleUpdatedEntities(Collection<T> newItems, Collection<T> oldItems,
-                                                                    Collection<T> newAddItems, Function<T, B> converter) {
-        // 排除新增项，剩下的是可能需要更新的项
+                                                                    Collection<T> newAddItems, Function<T, B> converter, String entityType) {
+        // Exclude new items, remaining may need updates
         Collection<T> potentialUpdates = new ArrayList<>(newItems);
         potentialUpdates.removeAll(newAddItems);
 
         if (potentialUpdates.isEmpty()) {
-            log.debug("没有需要更新的实体");
+            log.debug("[Entity: {}] No entities to update", entityType);
             return;
         }
 
-        // 转换为实体对象
+        // Convert to entity objects
         Collection<B> newEntities = potentialUpdates.stream()
                 .map(converter)
                 .collect(Collectors.toList());
@@ -172,15 +167,15 @@ public abstract class DbRepositorySupport {
                 .map(converter)
                 .collect(Collectors.toList());
 
-        // 查找变更的实体并更新
+        // Find changed entities and update
         Collection<ChangedEntity<B>> changedEntities = ObjectComparator.findChangedEntities(newEntities, oldEntities);
 
         if (changedEntities.isEmpty()) {
-            log.debug("没有发现变更的实体，无需更新");
+            log.debug("[Entity: {}] No changed entities found, no updates needed", entityType);
             return;
         }
 
-        log.debug("开始处理更新实体，数量: {}", changedEntities.size());
+        log.debug("[Entity: {}] Starting to process updated entities. Count: {}", entityType, changedEntities.size());
 
         changedEntities.forEach(changedEntity -> {
             B newEntity = changedEntity.getNewEntity();
@@ -190,19 +185,20 @@ public abstract class DbRepositorySupport {
             if (!changedFields.isEmpty()) {
                 boolean updateResult = update(newEntity, changedFields);
                 if (updateResult) {
-                    log.info("实体更新成功。ID: {}, 变更字段: {}", newEntity.getId(), changedFields);
+                    log.info("[Entity: {}] Entity update successful. ID: {}, Changed fields: {}",
+                            entityType, newEntity.getId(), changedFields);
                 } else {
-                    log.error("实体更新失败。ID: {}", newEntity.getId());
+                    log.error("[Entity: {}] Entity update failed. ID: {}", entityType, newEntity.getId());
                 }
             }
         });
     }
 
     /**
-     * 处理删除实体
+     * Handle entity deletions
      */
     private <T extends ID, B extends ID> boolean handleDeletedEntities(Collection<T> newItems, Collection<T> oldItems,
-                                                                       Function<T, B> converter) {
+                                                                       Function<T, B> converter, String entityType) {
         Collection<B> newEntities = newItems.stream()
                 .map(converter)
                 .collect(Collectors.toList());
@@ -214,77 +210,87 @@ public abstract class DbRepositorySupport {
         Collection<B> removedItems = ObjectComparator.findRemovedEntities(newEntities, oldEntities);
 
         if (removedItems.isEmpty()) {
-            log.debug("没有需要删除的实体");
+            log.debug("[Entity: {}] No entities to delete", entityType);
             return true;
         }
 
-        log.debug("开始处理删除实体，数量: {}", removedItems.size());
+        log.debug("[Entity: {}] Starting to process deleted entities. Count: {}", entityType, removedItems.size());
         boolean deleteResult = deleteBatch(removedItems);
 
         if (deleteResult) {
-            log.debug("删除实体处理完成，数量: {}", removedItems.size());
+            log.debug("[Entity: {}] Completed processing deleted entities. Count: {}", entityType, removedItems.size());
         } else {
-            log.error("删除实体处理失败，数量: {}", removedItems.size());
+            log.error("[Entity: {}] Failed to process deleted entities. Count: {}", entityType, removedItems.size());
         }
 
         return deleteResult;
     }
 
     /**
-     * 批量插入实体
+     * Get entity type name
+     */
+    private <T extends ID, B extends ID> String getEntityType(Collection<T> items, Function<T, B> converter) {
+        if (items.isEmpty()) {
+            return "UnknownType";
+        }
+        return items.iterator().next().getClass().getSimpleName();
+    }
+
+    /**
+     * Batch insert entities
      *
-     * @param items 待插入的实体集合
-     * @param <A>   实体类型
-     * @return 是否插入成功
+     * @param items Entities to insert
+     * @param <A>   Entity type
+     * @return Whether insertion was successful
      */
     protected abstract <A extends ID> boolean insertBatch(Collection<A> items);
 
     /**
-     * 批量删除实体
+     * Batch delete entities
      *
-     * @param items 待删除的实体集合
-     * @param <A>   实体类型
-     * @return 是否删除成功
+     * @param items Entities to delete
+     * @param <A>   Entity type
+     * @return Whether deletion was successful
      */
     protected abstract <A extends ID> boolean deleteBatch(Collection<A> items);
 
     /**
-     * 插入单个实体
+     * Insert single entity
      *
-     * @param entity 待插入的实体
-     * @param <A>    实体类型
-     * @return 是否插入成功
+     * @param entity Entity to insert
+     * @param <A>    Entity type
+     * @return Whether insertion was successful
      */
     protected abstract <A extends ID> boolean insert(A entity);
 
     /**
-     * 插入单个实体并进行转换
+     * Insert single entity with conversion
      *
-     * @param entity    待插入的实体
-     * @param converter 转换函数
-     * @param <A>       实体类型
-     * @param <B>       转换后的类型
-     * @return 是否插入成功
+     * @param entity    Entity to insert
+     * @param converter Conversion function
+     * @param <A>       Source entity type
+     * @param <B>       Target entity type
+     * @return Whether insertion was successful
      */
     protected abstract <A extends ID, B extends ID> boolean insert(A entity, Function<A, B> converter);
 
     /**
-     * 更新实体（非版本化）
+     * Update non-versioned entity
      *
-     * @param entity        待更新的实体
-     * @param changedFields 变更的字段集合
-     * @param <A>           实体类型
-     * @return 是否更新成功
+     * @param entity        Entity to update
+     * @param changedFields Changed fields
+     * @param <A>           Entity type
+     * @return Whether update was successful
      */
     protected abstract <A extends ID> boolean update(A entity, Set<String> changedFields);
 
     /**
-     * 更新实体（版本化，支持乐观锁）
+     * Update versioned entity with optimistic locking
      *
-     * @param entity        待更新的实体
-     * @param changedFields 变更的字段集合
-     * @param <A>           继承自Versionable的实体类型
-     * @return 是否更新成功
+     * @param entity        Entity to update
+     * @param changedFields Changed fields
+     * @param <A>           Entity type extending Versionable
+     * @return Whether update was successful
      */
     protected abstract <A extends Versionable> boolean update(A entity, Set<String> changedFields);
 }
