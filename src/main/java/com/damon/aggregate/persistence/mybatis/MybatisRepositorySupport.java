@@ -127,7 +127,9 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
         A newEntity = (A) ReflectUtil.newInstance(entity.getClass());
         newEntity.setId(entity.getId());
         newEntity.setVersion(entity.getVersion());
-        return update(entity, changedFields, newEntity);
+        boolean result = update(entity, changedFields, newEntity);
+        entity.setVersion(newEntity.getVersion());
+        return result;
     }
 
     private <A extends ID> boolean update(A entity, Set<String> changedFields, A newEntity) {

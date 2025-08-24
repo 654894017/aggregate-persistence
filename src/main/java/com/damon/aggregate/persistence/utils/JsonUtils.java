@@ -1,5 +1,6 @@
 package com.damon.aggregate.persistence.utils;
 
+import com.damon.aggregate.persistence.exception.AggregatePersistenceException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -23,7 +24,7 @@ public class JsonUtils {
         try {
             return objectMapper.writeValueAsString(object);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new AggregatePersistenceException(e);
         }
     }
 
@@ -31,7 +32,7 @@ public class JsonUtils {
         try {
             return (T) objectMapper.readValue(json, clazz);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new AggregatePersistenceException(e);
         }
     }
 
