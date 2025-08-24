@@ -14,7 +14,6 @@ import com.damon.aggregate.persistence.ID;
 import com.damon.aggregate.persistence.Versionable;
 import com.damon.aggregate.persistence.exception.AggregatePersistenceException;
 import com.damon.aggregate.persistence.utils.ReflectUtils;
-import org.apache.ibatis.executor.BatchResult;
 import org.apache.ibatis.session.SqlSession;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.SqlSessionUtils;
@@ -23,7 +22,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
