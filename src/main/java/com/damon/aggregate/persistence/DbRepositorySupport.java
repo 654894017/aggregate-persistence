@@ -2,6 +2,7 @@ package com.damon.aggregate.persistence;
 
 import com.damon.aggregate.persistence.comparator.ChangedEntity;
 import com.damon.aggregate.persistence.comparator.ObjectComparator;
+import com.damon.aggregate.persistence.exception.AggregatePersistenceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -144,7 +145,7 @@ public abstract class DbRepositorySupport {
             log.debug("新增实体处理完成，数量: {}", newAddItems.size());
         } else {
             log.error("新增实体处理失败，数量: {}", newAddItems.size());
-            throw new RuntimeException("批量插入新实体失败");
+            throw new AggregatePersistenceException("批量插入新实体失败");
         }
     }
 
