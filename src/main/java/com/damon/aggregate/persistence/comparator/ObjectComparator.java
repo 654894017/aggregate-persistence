@@ -1,72 +1,56 @@
 package com.damon.aggregate.persistence.comparator;
 
+import cn.hutool.core.builder.EqualsBuilder;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.ReflectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.damon.aggregate.persistence.ID;
-import com.damon.aggregate.persistence.exception.AggregatePersistenceException;
-import org.apache.commons.lang3.builder.EqualsBuilder;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class ObjectComparator {
+    private static final Map<Class<?>, Field[]> CLASS_FIELD_CACHE = new ConcurrentHashMap<>();
+
+    private static Field[] getCachedFields(Class<?> clazz) {
+        return CLASS_FIELD_CACHE.computeIfAbsent(clazz, ReflectUtil::getFields);
+    }
 
     public static Set<String> findChangedFields(Object newObject, Object oldObject) {
         return findChangedFields(newObject, oldObject, false);
     }
 
     public static Set<String> findChangedFields(Object newObject, Object oldObject, boolean toUnderlineCase) {
-        if (!isValidComparison(newObject, oldObject)) {
+        Objects.requireNonNull(newObject, "New object cannot be null");
+        Objects.requireNonNull(oldObject, "Old object cannot be null");
+        if (ObjectUtil.notEqual(newObject.getClass().getName(), oldObject.getClass().getName())) {
             return Collections.emptySet();
         }
 
         Set<String> differentFields = new HashSet<>();
-        for (Field field : ReflectUtil.getFields(newObject.getClass())) {
+        Class<?> clazz = newObject.getClass();
+        Field[] fields = getCachedFields(clazz);
+        for (Field field : fields) {
             if (Modifier.isStatic(field.getModifiers())) {
                 continue;
             }
 
             field.setAccessible(true);
-            Object newValue = getFieldValue(field, newObject);
-            Object oldValue = getFieldValue(field, oldObject);
 
-            if (!isEquals(newValue, oldValue)) {
+            Object newValue = ReflectUtil.getFieldValue(newObject, field);
+            Object oldValue = ReflectUtil.getFieldValue(oldObject, field);
+
+            if (ObjectUtil.notEqual(newValue, oldValue)) {
                 String name = toUnderlineCase ? StrUtil.toUnderlineCase(field.getName()) : field.getName();
                 differentFields.add(name);
             }
         }
         return differentFields;
-    }
-
-    private static Object getFieldValue(Field field, Object object) {
-        try {
-            return field.get(object);
-        } catch (IllegalAccessException e) {
-            throw new AggregatePersistenceException("无法访问字段：" + field.getName(), e);
-        }
-    }
-
-    private static boolean isValidComparison(Object obj1, Object obj2) {
-        return obj1 != null && obj2 != null && obj1.getClass() == obj2.getClass();
-    }
-
-    /**
-     * null == "", 否则调用 ObjectUtil.equal
-     *
-     * @param newValue
-     * @param oldValue
-     * @return
-     */
-    private static boolean isEquals(Object newValue, Object oldValue) {
-        if (newValue == null && "".equals(oldValue)) {
-            return true;
-        }
-        return ObjectUtil.equal(newValue, oldValue);
     }
 
     /**

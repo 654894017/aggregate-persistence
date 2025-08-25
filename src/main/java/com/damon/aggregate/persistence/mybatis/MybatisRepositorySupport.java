@@ -170,7 +170,17 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
     }
 
     /**
-     * Update without version
+     * Entity update method without explicit version number
+     * Note: If the entity implements the {@link Versionable} interface, optimistic locking control will be
+     * automatically implemented based on the version number, and the version number will be incremented
+     * after a successful update.
+     *
+     * @param entity        The entity to be updated (must contain a non-null ID)
+     * @param changedFields The set of fields that need to be updated (non-null; returns success directly if empty)
+     * @param <A>           Entity type (must implement the {@link ID} interface; must implement {@link Versionable}
+     *                      for optimistic locking support)
+     * @return Whether the update operation was successful
+     * @throws IllegalArgumentException Thrown when entity ID is null or failed to create condition entity via reflection
      */
     @Override
     protected <A extends ID> boolean update(A entity, Set<String> changedFields) {
@@ -186,35 +196,18 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
 
         A conditionEntity = (A) ReflectUtil.newInstance(entity.getClass());
         conditionEntity.setId(entity.getId());
-
-        return update(entity, changedFields, conditionEntity);
-    }
-
-    /**
-     * Safe update with version (optimistic locking)
-     */
-    @Override
-    protected <A extends Versionable> boolean update(A entity, Set<String> changedFields) {
-        Objects.requireNonNull(entity, "[Versioned Update] Entity cannot be null");
-        Objects.requireNonNull(changedFields, "[Versioned Update] Changed fields cannot be null");
-
-        String entityType = entity.getClass().getSimpleName();
-
-        if (changedFields.isEmpty()) {
-            log.debug("[Entity: {}] No fields to update. Entity ID: {}", entityType, entity.getId());
-            return true;
+        if (entity instanceof Versionable) {
+            Integer version = ((Versionable) entity).getVersion();
+            ((Versionable) conditionEntity).setVersion(version);
         }
-
-        A conditionEntity = (A) ReflectUtil.newInstance(entity.getClass());
-        conditionEntity.setId(entity.getId());
-        conditionEntity.setVersion(entity.getVersion());
 
         boolean result = update(entity, changedFields, conditionEntity);
 
         // Increment version if update successful
-        if (result) {
-            entity.setVersion(conditionEntity.getVersion() + 1);
-            log.trace("[Entity: {}] Incremented version. New version: {}", entityType, entity.getVersion());
+        if (result && entity instanceof Versionable) {
+            Integer version = ((Versionable) conditionEntity).getVersion();
+            ((Versionable) entity).setVersion(version);
+            log.debug("[Entity: {}] Incremented version. New version: {}", entityType, version);
         }
 
         return result;
@@ -244,12 +237,6 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
             log.trace("[Entity: {}] Setting update field: {} = {}", entityType, dbFieldName, fieldValue);
         });
 
-        // Add version condition for versionable entities
-        if (newEntity instanceof Versionable) {
-            Versionable versionable = (Versionable) newEntity;
-            updateWrapper.eq("version", versionable.getVersion());
-            log.trace("[Entity: {}] Adding version condition: version = {}", entityType, versionable.getVersion());
-        }
 
         SqlSession sqlSession = getSqlSession();
         try {

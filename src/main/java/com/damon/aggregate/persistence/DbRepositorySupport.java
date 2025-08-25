@@ -18,16 +18,16 @@ public abstract class DbRepositorySupport {
     private static final Logger log = LoggerFactory.getLogger(DbRepositorySupport.class);
 
     /**
-     * Perform safe update using database optimistic locking
+     * Execute non-safe update operation
      *
-     * @param newObj   New object
-     * @param oldObj   Old object
-     * @param function Conversion function
-     * @param <A>      Entity type extending Versionable
-     * @param <B>      DTO type extending Versionable
-     * @return Whether the update was successful
+     * @param newObj   new object
+     * @param oldObj   old object
+     * @param function function to convert old object to new object
+     * @param <A>      new object type
+     * @param <B>      old object type
+     * @return true if update is successful
      */
-    public <A extends Versionable, B extends Versionable> boolean executeSafeUpdate(B newObj, B oldObj, Function<B, A> function) {
+    public <A extends ID, B extends ID> boolean executeUpdate(B newObj, B oldObj, Function<B, A> function) {
         // Null pointer checks
         Objects.requireNonNull(newObj, "New object cannot be null");
         Objects.requireNonNull(oldObj, "Old object cannot be null");
@@ -48,7 +48,10 @@ public abstract class DbRepositorySupport {
         // Execute update and sync version number
         boolean result = update(newEntity, changedFields);
         if (result) {
-            newObj.setVersion(newEntity.getVersion());
+            if (newEntity instanceof Versionable && newObj instanceof Versionable) {
+                Integer version = ((Versionable) newEntity).getVersion();
+                ((Versionable) newObj).setVersion(version);
+            }
             log.debug("[Entity: {}] Safe update successful. Entity ID: {}, Changed fields: {}",
                     entityType, entityId, changedFields);
         } else {
@@ -56,6 +59,21 @@ public abstract class DbRepositorySupport {
         }
         return result;
     }
+
+    /**
+     * Perform safe update using database optimistic locking
+     *
+     * @param newObj   New object
+     * @param oldObj   Old object
+     * @param function Conversion function
+     * @param <A>      Entity type extending Versionable
+     * @param <B>      DTO type extending Versionable
+     * @return Whether the update was successful
+     */
+    public <A extends Versionable, B extends Versionable> boolean executeSafeUpdate(B newObj, B oldObj, Function<B, A> function) {
+        return executeUpdate(newObj, oldObj, function);
+    }
+
 
     /**
      * Incremental update for list (automatically handles new, modified, and deleted entities)
@@ -275,7 +293,7 @@ public abstract class DbRepositorySupport {
     protected abstract <A extends ID, B extends ID> boolean insert(A entity, Function<A, B> converter);
 
     /**
-     * Update non-versioned entity
+     * Update  entity
      *
      * @param entity        Entity to update
      * @param changedFields Changed fields
@@ -284,13 +302,4 @@ public abstract class DbRepositorySupport {
      */
     protected abstract <A extends ID> boolean update(A entity, Set<String> changedFields);
 
-    /**
-     * Update versioned entity with optimistic locking
-     *
-     * @param entity        Entity to update
-     * @param changedFields Changed fields
-     * @param <A>           Entity type extending Versionable
-     * @return Whether update was successful
-     */
-    protected abstract <A extends Versionable> boolean update(A entity, Set<String> changedFields);
 }
