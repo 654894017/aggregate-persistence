@@ -4,8 +4,7 @@ package com.damon.aggregate.persistence;
 import com.damon.aggregate.persistence.comparator.ChangedEntity;
 import com.damon.aggregate.persistence.comparator.ObjectComparator;
 import com.damon.aggregate.persistence.copier.DeepCopier;
-import org.apache.commons.lang3.builder.EqualsBuilder;
-
+import cn.hutool.core.builder.EqualsBuilder;
 import java.util.Collection;
 import java.util.Set;
 import java.util.function.Predicate;
