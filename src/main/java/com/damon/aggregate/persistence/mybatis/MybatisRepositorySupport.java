@@ -1,5 +1,6 @@
 package com.damon.aggregate.persistence.mybatis;
 
+import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.ReflectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -13,7 +14,6 @@ import com.damon.aggregate.persistence.DbRepositorySupport;
 import com.damon.aggregate.persistence.ID;
 import com.damon.aggregate.persistence.Versionable;
 import com.damon.aggregate.persistence.exception.AggregatePersistenceException;
-import com.damon.aggregate.persistence.utils.ReflectUtils;
 import org.apache.ibatis.session.SqlSession;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.SqlSessionUtils;
@@ -22,10 +22,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.lang.reflect.Field;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -219,15 +217,10 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
 
         // Get primary key
         String primaryKey = getPrimaryKey(newEntity.getClass());
-        if (StrUtil.isEmpty(primaryKey)) {
-            throw new AggregatePersistenceException(
-                    String.format("[Entity: %s] Primary key annotation @TableId not found", entityType)
-            );
-        }
 
         // Create update conditions
         UpdateWrapper<A> updateWrapper = new UpdateWrapper<>();
-        updateWrapper.eq(primaryKey, entityId);
+        updateWrapper.eq(StrUtil.toUnderlineCase(primaryKey), entityId);
 
         // Set update fields (convert to underline case)
         changedFields.forEach(field -> {
@@ -260,8 +253,19 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
         }
     }
 
-    private String getPrimaryKey(Class<?> entityClass) {
-        return ReflectUtils.getFieldNameByAnnotation(entityClass, TableId.class);
+    public String getPrimaryKey(Class<?> clazz) {
+        Field[] fields = ReflectUtil.getFields(clazz);
+        for (Field field : fields) {
+            TableId tableId = field.getAnnotation(TableId.class);
+            if (ObjectUtil.isNotNull(tableId)) {
+                return Optional.ofNullable(tableId)
+                        .map(TableId::value)
+                        .orElse(field.getName());
+            }
+        }
+        throw new AggregatePersistenceException(
+                String.format("[Entity: %s] Primary key annotation @TableId not found", clazz.getSimpleName())
+        );
     }
 
     /**
