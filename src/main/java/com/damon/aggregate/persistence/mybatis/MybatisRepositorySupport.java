@@ -259,6 +259,7 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
             TableId tableId = field.getAnnotation(TableId.class);
             if (ObjectUtil.isNotNull(tableId)) {
                 return Optional.ofNullable(tableId)
+                        .filter(id -> StrUtil.isNotBlank(id.value()))
                         .map(TableId::value)
                         .orElse(field.getName());
             }
