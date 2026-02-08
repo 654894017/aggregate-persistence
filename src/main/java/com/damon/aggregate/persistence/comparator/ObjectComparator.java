@@ -9,18 +9,11 @@ import com.damon.aggregate.persistence.ID;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class ObjectComparator {
-    private static final Map<Class<?>, Field[]> CLASS_FIELD_CACHE = new ConcurrentHashMap<>();
-
-    private static Field[] getCachedFields(Class<?> clazz) {
-        return CLASS_FIELD_CACHE.computeIfAbsent(clazz, ReflectUtil::getFields);
-    }
-
     public static Set<String> findChangedFields(Object newObject, Object oldObject) {
         return findChangedFields(newObject, oldObject, false);
     }
@@ -34,7 +27,7 @@ public class ObjectComparator {
 
         Set<String> differentFields = new HashSet<>();
         Class<?> clazz = newObject.getClass();
-        Field[] fields = getCachedFields(clazz);
+        Field[] fields = ReflectUtil.getFields(clazz);
         for (Field field : fields) {
             if (Modifier.isStatic(field.getModifiers())) {
                 continue;

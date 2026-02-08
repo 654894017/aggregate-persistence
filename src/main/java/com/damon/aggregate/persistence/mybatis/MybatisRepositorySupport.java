@@ -1,12 +1,12 @@
 package com.damon.aggregate.persistence.mybatis;
 
-import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.ReflectUtil;
-import cn.hutool.core.util.StrUtil;
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.enums.SqlMethod;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.metadata.TableFieldInfo;
+import com.baomidou.mybatisplus.core.metadata.TableInfo;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.core.toolkit.Constants;
 import com.baomidou.mybatisplus.extension.toolkit.SqlHelper;
@@ -14,6 +14,8 @@ import com.damon.aggregate.persistence.DbRepositorySupport;
 import com.damon.aggregate.persistence.ID;
 import com.damon.aggregate.persistence.Versionable;
 import com.damon.aggregate.persistence.exception.AggregatePersistenceException;
+import org.apache.ibatis.reflection.MetaObject;
+import org.apache.ibatis.reflection.SystemMetaObject;
 import org.apache.ibatis.session.SqlSession;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.SqlSessionUtils;
@@ -22,8 +24,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.lang.reflect.Field;
-import java.util.*;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -214,20 +218,21 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
     private <A extends ID> boolean update(A entity, Set<String> changedFields, A newEntity) {
         String entityType = entity.getClass().getSimpleName();
         Object entityId = entity.getId();
-
-        // Get primary key
-        String primaryKey = getPrimaryKey(newEntity.getClass());
+        TableInfo tableInfo = TableInfoHelper.getTableInfo(entity.getClass());
 
         // Create update conditions
         UpdateWrapper<A> updateWrapper = new UpdateWrapper<>();
-        updateWrapper.eq(StrUtil.toUnderlineCase(primaryKey), entityId);
+        updateWrapper.eq(tableInfo.getKeyColumn(), entityId);
 
         // Set update fields (convert to underline case)
+        MetaObject metaObject = SystemMetaObject.forObject(entity);
+        Map<String, String> fieldMap = tableInfo.getFieldList()
+                .stream().collect(Collectors.toMap(TableFieldInfo::getProperty, TableFieldInfo::getColumn));
         changedFields.forEach(field -> {
-            Object fieldValue = ReflectUtil.getFieldValue(entity, field);
-            String dbFieldName = StrUtil.toUnderlineCase(field);
-            updateWrapper.set(dbFieldName, fieldValue);
-            log.trace("[Entity: {}] Setting update field: {} = {}", entityType, dbFieldName, fieldValue);
+            Object fieldValue = metaObject.getValue(field);
+            String column = fieldMap.get(field);
+            updateWrapper.set(column, fieldValue);
+            log.trace("[Entity: {}] Setting update field: {} = {}", entityType, column, fieldValue);
         });
 
 
@@ -251,22 +256,6 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
         } finally {
             closeSqlSession(sqlSession);
         }
-    }
-
-    public String getPrimaryKey(Class<?> clazz) {
-        Field[] fields = ReflectUtil.getFields(clazz);
-        for (Field field : fields) {
-            TableId tableId = field.getAnnotation(TableId.class);
-            if (ObjectUtil.isNotNull(tableId)) {
-                return Optional.ofNullable(tableId)
-                        .filter(id -> StrUtil.isNotBlank(id.value()))
-                        .map(TableId::value)
-                        .orElse(field.getName());
-            }
-        }
-        throw new AggregatePersistenceException(
-                String.format("[Entity: %s] Primary key annotation @TableId not found", clazz.getSimpleName())
-        );
     }
 
     /**
