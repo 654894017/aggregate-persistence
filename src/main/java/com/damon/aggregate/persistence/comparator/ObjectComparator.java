@@ -2,12 +2,13 @@ package com.damon.aggregate.persistence.comparator;
 
 import cn.hutool.core.builder.EqualsBuilder;
 import cn.hutool.core.util.ObjectUtil;
-import cn.hutool.core.util.ReflectUtil;
-import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.metadata.TableFieldInfo;
+import com.baomidou.mybatisplus.core.metadata.TableInfo;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.damon.aggregate.persistence.ID;
+import org.apache.ibatis.reflection.MetaObject;
+import org.apache.ibatis.reflection.SystemMetaObject;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -18,6 +19,17 @@ public class ObjectComparator {
         return findChangedFields(newObject, oldObject, false);
     }
 
+    /**
+     * 比对两个数据库实体对象的字段差异。
+     * <p>
+     * 基于 MyBatis-Plus 的 {@link TableInfo} 元数据进行字段遍历，仅比对与数据库列映射的字段，
+     * 通过 {@link MetaObject} 进行字段读取，相比通用反射性能更优（TableInfo 已被 MyBatis 缓存）。
+     *
+     * @param newObject       新对象（必须为 MyBatis 实体类型）
+     * @param oldObject       旧对象（必须与 newObject 同类型）
+     * @param toUnderlineCase 是否输出下划线列名（true: 返回数据库列名；false: 返回 Java 属性名）
+     * @return 发生变化的字段集合
+     */
     public static Set<String> findChangedFields(Object newObject, Object oldObject, boolean toUnderlineCase) {
         Objects.requireNonNull(newObject, "New object cannot be null");
         Objects.requireNonNull(oldObject, "Old object cannot be null");
@@ -25,22 +37,24 @@ public class ObjectComparator {
             return Collections.emptySet();
         }
 
+        TableInfo tableInfo = TableInfoHelper.getTableInfo(newObject.getClass());
+        if (tableInfo == null) {
+            throw new IllegalArgumentException(
+                    String.format("Class [%s] is not a MyBatis-Plus entity (no TableInfo found). "
+                            + "findChangedFields requires a database entity type.", newObject.getClass().getName()));
+        }
+
         Set<String> differentFields = new HashSet<>();
-        Class<?> clazz = newObject.getClass();
-        Field[] fields = ReflectUtil.getFields(clazz);
-        for (Field field : fields) {
-            if (Modifier.isStatic(field.getModifiers())) {
-                continue;
-            }
+        MetaObject newMeta = SystemMetaObject.forObject(newObject);
+        MetaObject oldMeta = SystemMetaObject.forObject(oldObject);
 
-            field.setAccessible(true);
-
-            Object newValue = ReflectUtil.getFieldValue(newObject, field);
-            Object oldValue = ReflectUtil.getFieldValue(oldObject, field);
+        for (TableFieldInfo fieldInfo : tableInfo.getFieldList()) {
+            String property = fieldInfo.getProperty();
+            Object newValue = newMeta.getValue(property);
+            Object oldValue = oldMeta.getValue(property);
 
             if (ObjectUtil.notEqual(newValue, oldValue)) {
-                String name = toUnderlineCase ? StrUtil.toUnderlineCase(field.getName()) : field.getName();
-                differentFields.add(name);
+                differentFields.add(toUnderlineCase ? fieldInfo.getColumn() : property);
             }
         }
         return differentFields;

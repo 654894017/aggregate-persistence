@@ -90,13 +90,13 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
             log.warn("[Entity: {}] Batch delete failed - all entity IDs are null", entityType);
             return false;
         }
-
+        TableInfo tableInfo = TableInfoHelper.getTableInfo(entityClass);
         SqlSession sqlSession = getSqlSession();
         try {
             Map<String, Object> params = CollectionUtils.newHashMapWithExpectedSize(1);
             params.put(Constants.COLL, ids);
 
-            int deleted = sqlSession.delete(sqlStatement(SqlMethod.DELETE_BY_IDS.getMethod(), entityClass), params);
+            int deleted = sqlSession.delete(sqlStatement(SqlMethod.DELETE_BY_IDS.getMethod(), tableInfo), params);
             boolean success = deleted > 0;
 
             log.debug("[Entity: {}] Batch delete completed. Target IDs: {}, Deleted records: {}",
@@ -120,10 +120,10 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
                 log.trace("[Entity: {}] Initialized version to 1 for new entity", entityType);
             }
         }
-
+        TableInfo tableInfo = TableInfoHelper.getTableInfo(entity.getClass());
         SqlSession sqlSession = getSqlSession();
         try {
-            int inserted = sqlSession.insert(sqlStatement(SqlMethod.INSERT_ONE.getMethod(), entity.getClass()), entity);
+            int inserted = sqlSession.insert(sqlStatement(SqlMethod.INSERT_ONE.getMethod(), tableInfo), entity);
             boolean success = SqlHelper.retBool(inserted);
 
             if (success) {
@@ -156,9 +156,9 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
 
         return result;
     }
-
-    private String sqlStatement(String sqlMethod, Class<?> entityClass) {
-        return SqlHelper.table(entityClass).getSqlStatement(sqlMethod);
+    
+    private String sqlStatement(String sqlMethod, TableInfo tableInfo) {
+        return tableInfo.getSqlStatement(sqlMethod);
     }
 
     private void closeSqlSession(SqlSession sqlSession) {
@@ -224,16 +224,18 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
         UpdateWrapper<A> updateWrapper = new UpdateWrapper<>();
         updateWrapper.eq(tableInfo.getKeyColumn(), entityId);
 
-        // Set update fields (convert to underline case)
+        // Set update fields by directly iterating TableFieldInfo (avoid extra Map allocation per call)
         MetaObject metaObject = SystemMetaObject.forObject(entity);
-        Map<String, String> fieldMap = tableInfo.getFieldList()
-                .stream().collect(Collectors.toMap(TableFieldInfo::getProperty, TableFieldInfo::getColumn));
-        changedFields.forEach(field -> {
-            Object fieldValue = metaObject.getValue(field);
-            String column = fieldMap.get(field);
+        for (TableFieldInfo fieldInfo : tableInfo.getFieldList()) {
+            String property = fieldInfo.getProperty();
+            if (!changedFields.contains(property)) {
+                continue;
+            }
+            String column = fieldInfo.getColumn();
+            Object fieldValue = metaObject.getValue(property);
             updateWrapper.set(column, fieldValue);
             log.trace("[Entity: {}] Setting update field: {} = {}", entityType, column, fieldValue);
-        });
+        }
 
 
         SqlSession sqlSession = getSqlSession();
@@ -242,7 +244,7 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
             params.put(Constants.ENTITY, newEntity);
             params.put(Constants.WRAPPER, updateWrapper);
 
-            int updated = sqlSession.update(sqlStatement(SqlMethod.UPDATE.getMethod(), entity.getClass()), params);
+            int updated = sqlSession.update(sqlStatement(SqlMethod.UPDATE.getMethod(), tableInfo), params);
             boolean success = SqlHelper.retBool(updated);
 
             if (success) {

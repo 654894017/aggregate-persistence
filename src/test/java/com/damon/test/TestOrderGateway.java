@@ -1,9 +1,12 @@
 package com.damon.test;
 
 import cn.hutool.core.util.IdUtil;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.damon.aggregate.persistence.Aggregate;
 import com.damon.aggregate.persistence.AggregateFactory;
 import com.damon.test.domain.order.*;
+import com.damon.test.infrastructure.order.mapper.OrderMapper;
+import com.damon.test.infrastructure.order.mapper.OrderPO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,12 +21,15 @@ import java.util.List;
 public class TestOrderGateway {
     @Autowired
     private IOrderGateway orderGateway;
+    @Autowired
+    private OrderMapper orderMapper;
 
     @Test
     public void saveTest() {
         Aggregate<Order> orderAggregate = orderGateway.get(new OrderId(2L));
         Order order = orderAggregate.getRoot();
         order.setStatus(order.getStatus() + 1);
+        order.setDeductionPoints(100l);
         List<OrderItem> item = order.getOrderItems();
         item.add(new OrderItem(order.getId(), 1l, "1", 1, 1l));
         item.add(new OrderItem(order.getId(), 1l, "1", 1, 1l));
@@ -54,5 +60,19 @@ public class TestOrderGateway {
         Aggregate<Order> orderAggregate = AggregateFactory.createAggregate(order);
         orderGateway.save(orderAggregate);
     }
+
+    @Test
+    public void saveTest2() {
+
+        OrderPO orderPO = orderMapper.selectById(2L);
+
+        LambdaUpdateWrapper<OrderPO> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(OrderPO::getId, orderPO.getId());
+        updateWrapper.set(OrderPO::getConsigneeMobile, "15806039812");
+        orderMapper.update(orderPO, updateWrapper);
+
+
+    }
+
 
 }
