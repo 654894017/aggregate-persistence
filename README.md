@@ -73,8 +73,8 @@ public class OrderGateway extends MybatisRepositorySupport implements IOrderGate
     private Long update(Aggregate<Order> orderAggregate) {
         Order order = orderAggregate.getRoot();
         Order snapshot = orderAggregate.getSnapshot();
-        Boolean result = super.executeSafeUpdate(order, snapshot, OrderFactory::convert);
-        Boolean result2 = super.executeListUpdate(order.getOrderItems(), snapshot.getOrderItems(), item -> {
+        Boolean result = super.saveChanges(order, snapshot, OrderFactory::convert);
+        Boolean result2 = super.saveChangesList(order.getOrderItems(), snapshot.getOrderItems(), item -> {
             item.setOrderId(order.getId());
             return OrderFactory.convert(item);
         });
@@ -110,14 +110,24 @@ public class OrderGateway extends MybatisRepositorySupport implements IOrderGate
 与Hibernate的`@Version`类似，聚合根需要实现Versionable接口，以便Repository基于Version实现乐观锁。Repository对聚合的所有持久化操作，都要判断Version。示意SQL如下：
 
 ```sql
-insert into person (id, name, age, address, version )
+insert into person (id, name, age, address, version)
 values (#{id}, #{name}, #{age}, #{address}, 1)
 
-update person set age = #{age}, address = #{address}, version = version + 1
-where id = #{id} and version = #{version}
+update person
+set age     = #{age},
+    address = #{address},
+    version = version + 1
+where id = #{id}
+  and version = #{version}
 
-delete person
-where id = #{id} and version = #{version}
+delete
+person
+where id =
+#{id}
+and
+version
+=
+#{version}
 ``` 
 
 ## 2. 使用aggregate-persistence

@@ -30,36 +30,16 @@ public class Aggregate<R extends Versionable> {
         return root.getVersion() == NEW_VERSION || root.getVersion() == null;
     }
 
-//    public <T extends ID> Collection<T> findNewEntities(Collection<T> newEntities, Collection<T> oldEntities) {
-//        return ObjectComparator.findNewEntities(newEntities, oldEntities);
-//    }
-//
-//    public <T extends ID> Collection<T> findNewEntities(Collection<T> newEntities, Predicate<T> predicate) {
-//        return ObjectComparator.findNewEntities(newEntities, predicate);
-//    }
-//
-//    public <T extends ID> Collection<T> findRemovedEntities(Collection<T> newEntities, Collection<T> oldEntities) {
-//        return ObjectComparator.findRemovedEntities(newEntities, oldEntities);
-//    }
-//
-//    public <T extends ID> Collection<ChangedEntity<T>> findChangedEntities(Collection<T> newEntities, Collection<T> oldEntities) {
-//        return ObjectComparator.findChangedEntities(newEntities, oldEntities);
-//    }
-//
-//    public Set<String> findChangedFields(Object newObject, Object oldObject) {
-//        return ObjectComparator.findChangedFields(newObject, oldObject, false);
-//    }
-
     public R getRoot() {
         return root;
     }
 
-    public R getSnapshot() {
-        return snapshot;
-    }
-
     public void setRoot(R root) {
         this.root = root;
+    }
+
+    public R getSnapshot() {
+        return snapshot;
     }
 }
 

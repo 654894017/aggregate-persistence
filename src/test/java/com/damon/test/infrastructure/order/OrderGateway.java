@@ -60,8 +60,8 @@ public class OrderGateway extends MybatisRepositorySupport implements IOrderGate
     private Long update(Aggregate<Order> orderAggregate) {
         Order order = orderAggregate.getRoot();
         Order snapshot = orderAggregate.getSnapshot();
-        boolean orderResult = super.executeSafeUpdate(order, snapshot, OrderFactory::convert);
-        boolean orderItemResult = super.executeListUpdate(order.getOrderItems(), snapshot.getOrderItems(), item -> {
+        boolean orderResult = super.saveChanges(order, snapshot, OrderFactory::convert);
+        boolean orderItemResult = super.saveChangesList(order.getOrderItems(), snapshot.getOrderItems(), item -> {
             item.setOrderId(order.getId());
             return OrderFactory.convert(item);
         });

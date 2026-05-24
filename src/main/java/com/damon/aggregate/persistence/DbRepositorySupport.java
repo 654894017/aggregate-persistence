@@ -18,16 +18,14 @@ public abstract class DbRepositorySupport {
     private static final Logger log = LoggerFactory.getLogger(DbRepositorySupport.class);
 
     /**
-     * Execute non-safe update operation
+     * Execute update operation
      *
      * @param newObj   new object
      * @param oldObj   old object
      * @param function function to convert old object to new object
-     * @param <A>      new object type
-     * @param <B>      old object type
      * @return true if update is successful
      */
-    public <A extends ID, B extends ID> boolean executeUpdate(B newObj, B oldObj, Function<B, A> function) {
+    public <A extends ID, B extends ID> boolean saveChanges(B newObj, B oldObj, Function<B, A> function) {
         // Null pointer checks
         Objects.requireNonNull(newObj, "New object cannot be null");
         Objects.requireNonNull(oldObj, "Old object cannot be null");
@@ -60,49 +58,38 @@ public abstract class DbRepositorySupport {
         return result;
     }
 
-    /**
-     * Perform safe update using database optimistic locking
-     *
-     * @param newObj   New object
-     * @param oldObj   Old object
-     * @param function Conversion function
-     * @param <A>      Entity type extending Versionable
-     * @param <B>      DTO type extending Versionable
-     * @return Whether the update was successful
-     */
-    public <A extends Versionable, B extends Versionable> boolean executeSafeUpdate(B newObj, B oldObj, Function<B, A> function) {
-        return executeUpdate(newObj, oldObj, function);
-    }
-
 
     /**
-     * Incremental update for list (automatically handles new, modified, and deleted entities)
-     * Note: Entities with non-existent IDs will be inserted
+     * Persist incremental changes between two entity collections (handles inserts, updates,
+     * and deletes automatically).
+     * <p>
+     * Note: Entities whose IDs are absent from {@code oldItems} (or {@code null}) will be inserted.
      *
-     * @param newItems  New entity list
-     * @param oldItems  Old entity list
-     * @param converter Conversion function
-     * @param <A>       Entity type extending ID
-     * @param <B>       DTO type extending ID
-     * @return Whether the update was successful
+     * @param newItems  New entity list (current state)
+     * @param oldItems  Old entity list (snapshot state)
+     * @param converter Conversion function (domain model -> persistence entity)
+     * @param <A>       Persistence entity type extending {@link ID}
+     * @param <B>       Domain model type extending {@link ID}
+     * @return Whether the operation succeeded
      */
-    public <A extends ID, B extends ID> boolean executeListUpdate(Collection<B> newItems, Collection<B> oldItems, Function<B, A> converter) {
-        return executeListUpdate(newItems, oldItems, converter, null);
+    public <A extends ID, B extends ID> boolean saveChangesList(Collection<B> newItems, Collection<B> oldItems, Function<B, A> converter) {
+        return saveChangesList(newItems, oldItems, converter, null);
     }
 
     /**
-     * Incremental update for list (automatically handles new, modified, and deleted entities)
+     * Persist incremental changes between two entity collections (handles inserts, updates,
+     * and deletes automatically), with a custom predicate for identifying new entities.
      *
-     * @param newItems  New entity list
-     * @param oldItems  Old entity list
-     * @param converter Conversion function
+     * @param newItems  New entity list (current state)
+     * @param oldItems  Old entity list (snapshot state)
+     * @param converter Conversion function (domain model -> persistence entity)
      * @param isNew     Predicate to determine if an entity is new
-     * @param <T>       DTO type extending ID
-     * @param <B>       Entity type extending ID
-     * @return Whether the update was successful
+     * @param <T>       Domain model type extending {@link ID}
+     * @param <B>       Persistence entity type extending {@link ID}
+     * @return Whether the operation succeeded
      */
-    public <T extends ID, B extends ID> boolean executeListUpdate(Collection<T> newItems, Collection<T> oldItems,
-                                                                  Function<T, B> converter, Predicate<T> isNew) {
+    public <T extends ID, B extends ID> boolean saveChangesList(Collection<T> newItems, Collection<T> oldItems,
+                                                                Function<T, B> converter, Predicate<T> isNew) {
         // Handle null collections to avoid NPE
         Collection<T> safeNewItems = Optional.ofNullable(newItems).orElse(Collections.emptyList());
         Collection<T> safeOldItems = Optional.ofNullable(oldItems).orElse(Collections.emptyList());

@@ -156,7 +156,7 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
 
         return result;
     }
-    
+
     private String sqlStatement(String sqlMethod, TableInfo tableInfo) {
         return tableInfo.getSqlStatement(sqlMethod);
     }
