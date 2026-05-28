@@ -138,7 +138,7 @@ public class MybatisRepositorySupport extends DbRepositorySupport {
     }
 
     @Override
-    protected <A extends ID, B extends ID> boolean insert(A entity, Function<A, B> function) {
+    protected <A extends ID, B extends ID> boolean save(A entity, Function<A, B> function) {
         Objects.requireNonNull(entity, "[Insert with conversion] Source entity cannot be null");
         Objects.requireNonNull(function, "[Insert with conversion] Conversion function cannot be null");
 

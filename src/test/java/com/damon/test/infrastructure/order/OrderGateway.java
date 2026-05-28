@@ -37,10 +37,10 @@ public class OrderGateway extends MybatisRepositorySupport implements IOrderGate
 
     private Long create(Aggregate<Order> orderAggregate) {
         Order order = orderAggregate.getRoot();
-        super.insert(order, OrderFactory::convert);
+        super.save(order, OrderFactory::convert);
         order.getOrderItems().forEach(orderItem -> {
             orderItem.setOrderId(order.getId());
-            super.insert(orderItem, OrderFactory::convert);
+            super.save(orderItem, OrderFactory::convert);
         });
         return order.getId();
     }

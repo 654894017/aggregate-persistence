@@ -277,7 +277,7 @@ public abstract class DbRepositorySupport {
      * @param <B>       Target entity type
      * @return Whether insertion was successful
      */
-    protected abstract <A extends ID, B extends ID> boolean insert(A entity, Function<A, B> converter);
+    protected abstract <A extends ID, B extends ID> boolean save(A entity, Function<A, B> converter);
 
     /**
      * Update  entity
